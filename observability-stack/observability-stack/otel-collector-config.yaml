@@ -1,0 +1,54 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: otel-collector:4317
+      http:
+        endpoint: otel-collector:4318
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otelcol'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['0.0.0.0:8888']
+exporters:
+  debug:
+
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+    timeout: 60s
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+  otlphttp/logs:
+    endpoint: "http://loki:3100/otlp"
+    tls:
+      insecure: true
+connectors:
+  spanmetrics:
+    dimensions:
+      - name: http.method
+      - name: http.status_code
+      - name: http.route
+      - name: http.url
+processors:
+  batch:
+    send_batch_size: 2000
+    send_batch_max_size: 5000
+  # probabilistic_sampler:
+  #   sampling_percentage: 30
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [spanmetrics, otlp/tempo]
+    metrics/spanmetrics:
+      receivers: [spanmetrics, otlp]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/logs]
